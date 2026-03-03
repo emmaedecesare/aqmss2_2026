@@ -1,0 +1,209 @@
+---
+title: "Assignment4.2"
+output: pdf_document
+date: "2026-03-01"
+---
+
+```{r 2.1}
+library(tidyverse)
+library(dplyr)
+library("modelsummary")
+library("marginaleffects")
+library(ggplot2)
+install.packages("readstata13", repos = "http://cran.us.r-project.org")
+library(broom)
+
+
+df <- readstata13::read.dta13("https://raw.githubusercontent.com/franvillamil/AQM2/refs/heads/master/datasets/other/infantmortality.dta")
+
+summary(df$country)
+unique(df$region)
+summary(df$income)
+summary(df$infant)
+# 101 countries in the set
+
+hist(df$income, xlab = "Income", main = "Income Histogram")
+hist(df$infant, xlab = "Infant Mortality Rate (per 1,000 live births)", main = "Infant Histogram")
+```
+
+Both variables "Infant" and "Income" are right skewed, we know this because the graphs peaks are more towards the left and because the means are bigger than the medians.
+
+```{r plot 1}
+
+ggplot(df, aes(x=income, y = infant, color = region))+
+  geom_point()+
+  labs(
+    x = "Income",
+    y = "Infant Mortality Rate (per 1,000 live births)"
+  ) +
+  scale_color_manual(values = c("Asia" = "red", "Europe" = "blue", 
+                                "Americas" = "green", "Africa" = "yellow"))
+
+```
+Africa generally (with a couple outliers) has low income and relatively high infant mortality rates. Europe has countries with various incomes but mostly all low infant mortality rates. The Americas are clustered at low incomes (with some outliers) and low infant mortality rates. Lastly, Asia has more variety and has many outliers in terms of high income and for high infant mortality rates too.
+
+```{r plot 2}
+
+ggplot(df, aes(x=log(income), y = log(infant), color = region))+
+  geom_point()+
+  labs(
+    x = "Income",
+    y = "Infant Mortality Rate (per 1,000 live births)"
+  ) +
+  scale_color_manual(values = c("Asia" = "red", "Europe" = "blue", 
+                                "Americas" = "green", "Africa" = "yellow"))
+
+
+```
+
+This graph seems more linear than the last and is spread moreso that it is easier to see the relationships for each region. Yet the outliers are still obvious and we cannot be sure yet that the relationship(s) is(are) linear.
+
+```{r 2.2}
+
+m1 = lm(infant ~ income, data = df)
+summary(m1)
+
+m2 = lm(log(infant) ~ log(income), data = df)
+summary(m2)
+
+```
+• In m1: what is the predicted change in infant mortality for a $1,000 increase in income?
+
+  For a $1,000 increase in income for a country, the model predicts a decrease of 0.0209 in infant mortality rate (20.9 less deaths per 1,000 live births)
+
+• In m2: recall that the log-log coefficient is an elasticity. What does it mean here? (e.g.,“A 10% increase in income is associated with a % change in infant mortality.”)
+
+  A 10% increase in income is associated with a -.512% change in infant mortality
+  
+```{r residual plots}
+
+m1_aug = augment(m1)
+ggplot(m1_aug, aes(x = .fitted, y = .resid, color = df$region)) +
+  geom_point() +
+  scale_color_manual(values = c("Asia" = "red", "Europe" = "blue", 
+                                "Americas" = "green", "Africa" = "yellow"))+
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Fitted values", y = "Residuals", title = "Residuals vs Fitted: Level-Linear (m1)")
+  
+
+m2_aug = augment(m2)
+ggplot(m2_aug, aes(x = .fitted, y = .resid, color = df$region)) +
+  geom_point() +
+  scale_color_manual(values = c("Asia" = "red", "Europe" = "blue", 
+                                "Americas" = "green", "Africa" = "yellow"))+
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Fitted values", y = "Residuals", title = "Residuals vs Fitted: Level-Log (m2)")
+
+```
+
+The log function has a significantly better residual pattern. The linear model is clustered almost entirely at the bottom right part of the graph with multiple large outliers whereas the log function model is spread more across the line with only a couple outliers.
+```{r 2.3 m3}
+
+m3 = lm(log(infant) ~ log(income) + region + oil, data = df)
+broom::tidy(m3)
+
+```
+The income effect only changes it slightly, with an increase of less than 0.2.
+
+Africa is the reference category in this case, therefore, it is higher than all other regions.
+
+```{r 2.3 marginal effects}
+
+avg_slopes(m3)
+
+exp(-0.00159)
+
+```
+This shows the marginal effects of income, so for every $1 increase in the log of income, there is a decrease by 0.00159 in  the log of the infant mortality rate in that country. 
+
+```{r 2.4}
+m4 = lm(log(infant) ~ log(income) * oil + region, data = df)
+summary(m4)
+avg_slopes(m4, variables = "income", by = "oil")
+p4 <- plot_slopes(m4, variables = "income", condition = "oil")
+p4
+ggsave("slope_plot_Assignment4.2.png", p4, width = 6, height = 4)
+
+```
+If the country does not export oil, then for every 1$ increase in per-capita income, there is a decrease of 0.00209 in infant mortality rate. 
+If the country does export oil, then for every 1$ increase in per-capita income, there is an increase of 0.00111 in infant mortality rate. 
+This could be explained by confounding factors such as how developed the country is, whether they are democratic or not, the effectiveness of their healthcare system (or lack thereof). If these factors differ from countries that export oil versus the countries that do not, they could be explanatory for the increase in infant mortality rate when income per capita increases in oil-exporting countries.
+
+``` {r 2.5}
+
+p1 = predictions(m3,
+  newdata = datagrid(
+    income = c(1000),
+    region = c("Africa"),
+    oil = c("no")))
+p1
+exp(coef(p1))
+
+p2 = predictions(m3,
+  newdata = datagrid(
+    income = c(20000),
+    region = c("Europe"),
+    oil = c("no")))
+p2
+exp(coef(p2))
+
+p3 = predictions(m3,
+  newdata = datagrid(
+    income = c(10000),
+    region = c("Americas"),
+    oil = c("yes")))
+p3
+exp(coef(p3))
+```
+
+A non-oil African country with an income of $1,000's infant mortality rate is about 67.
+
+A non-oil European country with an income of $20,000's infant mortality rate is about 8.61.
+
+An oil-exporting country in the Americas with an income of $10,000's infant mortality rate is 33.53.
+
+There is a large gap in between the predicted African country and the predicted European country. However, these numbers generally make sense as Africa already had a higher infant mortality rate, especially when you count that it is low-income. Similarly, it is likely that the European country with high income would
+
+
+``` {r 2.6}
+
+plot1 <- plot_predictions(m3, condition = list("income", "region"))+
+  theme_minimal()
+plot1
+
+```
+This predicted plot shows that as the income level of a country increases, infant mortality rate decreases. The decline in infant mortality rate is steep as income first begins to increase, then slows as income becomes greater than $1,000. Europe overall has the lowest infant child mortality rate, followed by Asia, with the Americas slightly higher. Africa is predicted to have the overall highest infant mortality rate, no matter the income level. The main limitations of this study is that there may be confounding factors affecting infant mortality rate, not whether it is an oil-exporting country or not. Similarly, how full and accurate is the data? How was the data collected? We cannot be positive that the infant mortality rate is entirely accurate, especially in countries where healthcare is less formalized, possibly underreporting (or overreporting) infant deaths.
+
+``` {r 2.7}
+
+m3_aug = augment(m3)
+ggplot(m3_aug, aes(x = .fitted, y = .resid, color = df$region)) +
+  geom_point() +
+  scale_color_manual(values = c("Asia" = "red", "Europe" = "blue", 
+                                "Americas" = "green", "Africa" = "yellow"))+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+  labs(x = "Fitted values", y = "Residuals", title = "Residuals vs Fitted: Level-Linear (m1)")
+
+
+```
+
+``` {r 2.7 summmary}
+
+modelsummary(
+  list("Level" = m1, "Log-Log" = m2,
+       "Controls" = m3, "Interaction" = m4),
+  vcov = "robust",
+  stars = TRUE,
+  gof_map = c("r.squared", "nobs"))
+
+modelsummary(
+  list("Level" = m1, "Log-Log" = m2,
+       "Controls" = m3, "Interaction" = m4),
+  stars = TRUE,
+  gof_map = c("r.squared", "nobs"))
+
+```
+These results do not demonstrate heteroskedasticity as the standard errors are not increasing or decreasing due to the increase in the dependent variable.
+
+In this instance, the standard errors do not change when using robust versus default standard errors. However, we should still use it as there is no downside to using it and it will always ensure homoskedasticity, whether the default standard errors are heteroskedastic or not.
+
