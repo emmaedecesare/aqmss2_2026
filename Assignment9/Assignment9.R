@@ -20,7 +20,7 @@ library(AER)
 data(BEPS)
 
 #------------------------------------------------------------------------------
-                                  # 1.1
+                                   #1
 #------------------------------------------------------------------------------
 
 table(BEPS$economic.cond.national)
@@ -97,7 +97,74 @@ summary(m_nb)
 AIC(m_nb)
 
 
+#------------------------------------------------------------------------------
+                                   #2.1
+#------------------------------------------------------------------------------
 
+library(survival)
+
+df = survival::lung
+
+lung$dead = lung$status - 1
+
+summary(lung)
+summary(lung$dead == 0)\
+163/228
+
+#There are 228 observations, 63 events/deaths, 165 censored cases, 71.5% of cases
+`#are censored, which seems like a substantial amount. 
+
+curve1 = survfit(Surv(time, dead) ~ 1, data = lung)
+curve1 = broom::tidy(curve1)
+summary(curve1)
+median(curve1$time)
+
+#the median survival time, meaning the median number of days that each observation
+  #survives before death, is 274 days.
+
+curve2 = survfit(Surv(time, dead) ~ 1 + sex, data = lung)
+curve2 = broom::tidy(curve2)
+
+plot1 = ggplot(curve2, aes(time, estimate, color = strata)) +
+  geom_step() + geom_ribbon(aes(ymin = conf.low, ymax = conf.high, fill = strata), alpha = .2)
+
+ggsave("plot1_Assignment9.png", plot1, width = 6, height = 4)
+
+survdiff(Surv(time, dead) ~ 1 + sex, data = lung)
+
+#Males are expected to survive longer. The confidence intervals do overlap at a
+  #point. The p-value is 0.001, meaning that the survival curves are statistically
+  #significant.
+
+#------------------------------------------------------------------------------
+                                   #2.2
+#------------------------------------------------------------------------------
+
+cox_fit = coxph(Surv(time, dead) ~ 1 + sex + age + ph.ecog, data = lung)
+cox_fit
+
+#The hazard ratio for sex is 0.58, meaning a 42% lower hazard and therefore, 
+  #longer survival. It shows that women have a 42% lower hazard and will survive
+  #longer. It is statistically significant.
+  
+#The hazard ratio for ph.ecog is 1.59, meaning there is 59% higher hazard per 
+  #unit increase. For every unit someone moves up in the scale, and gets
+  #physically worse, their hazard of death increases by 59%
+  
+cox.zph(coxph(Surv(time, dead) ~ 1 + sex + age + ph.ecog, data = lung))
+
+#The p-value for sex is 0.13, the p-value for age is 0.66, the p-value for ph.ecog
+  #is 0.15, the p-value for GLOBAL is 0.22. None of the variables violate this
+  #assumption. None of the variables' effects change over the course of the 
+  #disease.
+
+#The Kaplan-Meier analysis suggested that there are survival differences by sex.
+  #The hazard tests for sex and ph.ecog were statistically significant. They 
+  #demonstrate that women are likely to survive longer and as someone progresses
+  #towards less physically fit, they have a higher hazard of death. The 
+  #proportional hazards assumption holds. Less physically fit men are more likely
+  #to die sooner when they have advanced lung cancer, with physically fit women
+  #being on the other end of the spectrum.
 
 
 
